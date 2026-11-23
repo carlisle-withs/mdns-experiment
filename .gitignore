@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+dns_change_result.txt
+firewall_result.txt
