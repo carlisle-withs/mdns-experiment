@@ -6,7 +6,7 @@
 > 实验环境：Windows 11（服务器端）+ Android 12 手机（客户端）+ 家庭/办公 WiFi 路由器
 > 实验结果：**成功**。手机连电脑热点后，浏览器直接访问 `http://myflask.local:5000`：
 
-![手机成功访问截图](success_screenshot.jpg)
+![手机成功访问截图](docs/images/success_screenshot.jpg)
 
 ---
 
@@ -55,29 +55,29 @@ pip install -r requirements.txt
 
 ```bash
 # 终端 1：Flask 应用（换成你自己的 app 也行，监听 0.0.0.0 是关键）
-python server.py
+python src/server.py
 ```
 
 ```bash
 # 终端 2：mDNS 应答器（注册 myflask.local -> 热点 IP + WiFi IP）
-python mdns_register.py --ip "192.168.137.1,10.21.149.173"
+python src/mdns_register.py --ip "192.168.137.1,10.21.149.173"
 ```
 
 ```bash
 # 终端 3：DNS 服务器（myflask.local 本地应答，其余域名转发 223.5.5.5）
-python dns_server.py
+python src/dns_server.py
 ```
 
 ### 3.3 开启 Windows 移动热点（记录输出的 SSID 和密码）
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\hotspot_on.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\hotspot_on.ps1
 ```
 
 ### 3.4 放行防火墙（**管理员** PowerShell）
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\add_firewall_rules.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\add_firewall_rules.ps1
 ```
 
 放行 TCP 5000（Flask）和 UDP 5353（mDNS），均限定 `remoteip=localsubnet` 只对本网段开放。
@@ -85,7 +85,7 @@ powershell -ExecutionPolicy Bypass -File .\add_firewall_rules.ps1
 ### 3.5 把 WLAN 网卡 DNS 指向本地 DNS 服务器（**管理员** PowerShell）
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\set_dns.ps1 -Address 127.0.0.1
+powershell -ExecutionPolicy Bypass -File .\scripts\set_dns.ps1 -Address 127.0.0.1
 ```
 
 > **为什么改这一步**：Windows 热点会把 WLAN 网卡的 DNS 直接下发给手机。
@@ -95,7 +95,7 @@ powershell -ExecutionPolicy Bypass -File .\set_dns.ps1 -Address 127.0.0.1
 
 ### 3.6 手机连接热点并访问
 
-1. 手机连上热点输出的 SSID（名称和密码以 `hotspot_on.ps1` 的输出为准，开启热点前可在 Windows 设置 → 移动热点 中修改）
+1. 手机连上热点输出的 SSID（名称和密码以 `scripts/hotspot_on.ps1` 的输出为准，开启热点前可在 Windows 设置 → 移动热点 中修改）
 2. 浏览器访问 `http://myflask.local:5000`
 3. 如果失败：**关闭再打开手机 WiFi**（强制重新获取 DHCP，刷新 DNS 配置）后重试；
    浏览器可能缓存了旧的失败结果，用无痕模式或换浏览器
@@ -108,7 +108,7 @@ powershell -ExecutionPolicy Bypass -File .\set_dns.ps1 -Address 127.0.0.1
 ## 4. 方案 A：普通 WiFi + mDNS（简单场景）
 
 1. 完成上面 3.1、3.2（终端 1、2）、3.4
-2. mDNS 注册只填 WiFi IP：`python mdns_register.py`（自动探测）
+2. mDNS 注册只填 WiFi IP：`python src/mdns_register.py`（自动探测）
 3. 手机连**同一个路由器 WiFi**，浏览器访问 `http://myflask.local:5000`
 
 **适用条件**：路由器没开 AP 隔离 + 手机系统/浏览器对 mDNS 支持良好（iPhone、Windows、macOS 一般没问题）。
@@ -132,7 +132,7 @@ powershell -ExecutionPolicy Bypass -File .\set_dns.ps1 -Address 127.0.0.1
    它的上游跟随网卡 DNS——网卡 DNS 若填 `192.168.137.1` 就自环，全部返回 NXDOMAIN。
    解决：网卡 DNS 填 `127.0.0.1`（热点组件转发给我们的 DNS 服务器，再由我们转发公共 DNS）。
 6. **手机 DHCP 租约缓存**：手机快速关开 WiFi 会复用旧租约，拿不到新 DNS。
-   解决：重启热点强制 DHCP 重新分配（`hotspot_restart.ps1`），或手机"忽略此网络"后重连。
+   解决：重启热点强制 DHCP 重新分配（`scripts/hotspot_restart.ps1`），或手机"忽略此网络"后重连。
 7. **PowerShell 5.1 编码坑**：Windows PowerShell 按 ANSI/GBK 读取 UTF-8（无 BOM）脚本，
    中文注释/字符串会破坏语法。**.ps1 脚本一律写纯 ASCII**。
 8. **包名陷阱**：mDNS 库的 pip 包名是 `zeroconf`，不是 `python-zeroconf`。
@@ -143,7 +143,7 @@ powershell -ExecutionPolicy Bypass -File .\set_dns.ps1 -Address 127.0.0.1
 手机浏览器输入 http://myflask.local:5000
         │
         ▼ 手机系统 DNS 查询（发往热点下发的 DNS）
-192.168.137.1:53 ──► 我们的 dns_server.py（本地应答 myflask.local -> 192.168.137.1）
+192.168.137.1:53 ──► src/dns_server.py（本地应答 myflask.local -> 192.168.137.1）
         │                └─ 其他域名 ──► 转发 223.5.5.5（手机正常上网不受影响）
         ▼ 手机拿到 IP，直连 192.168.137.1:5000
 Flask 响应 ✅
@@ -154,20 +154,20 @@ Flask 响应 ✅
 
 | 文件 | 说明 |
 |---|---|
-| `server.py` | Flask 测试应用（`/` 与 `/health`，监听 `0.0.0.0:5000`），可替换成你自己的 app |
-| `mdns_register.py` | mDNS 应答器，注册 `.local` 域名的 A/SRV 记录，支持 `--name/--ip/--port` |
-| `dns_server.py` | 极简 DNS 服务器：`myflask.local` 本地应答，其余转发上游（默认 `223.5.5.5`），带查询日志 |
-| `hotspot_on.ps1` | 开启 Windows 移动热点（输出 SSID/密码），PowerShell 调 WinRT API |
-| `hotspot_restart.ps1` | 重启热点（强制手机 DHCP 刷新） |
-| `add_firewall_rules.ps1` | 添加防火墙入站规则（管理员运行） |
-| `set_dns.ps1` | 设置/回滚 WLAN 网卡 DNS（管理员运行） |
+| `src/server.py` | Flask 测试应用（`/` 与 `/health`，监听 `0.0.0.0:5000`），可替换成你自己的 app |
+| `src/mdns_register.py` | mDNS 应答器，注册 `.local` 域名的 A/SRV 记录，支持 `--name/--ip/--port` |
+| `src/dns_server.py` | 极简 DNS 服务器：`myflask.local` 本地应答，其余转发上游（默认 `223.5.5.5`），带查询日志 |
+| `scripts/hotspot_on.ps1` | 开启 Windows 移动热点（输出 SSID/密码），PowerShell 调 WinRT API |
+| `scripts/hotspot_restart.ps1` | 重启热点（强制手机 DHCP 刷新） |
+| `scripts/add_firewall_rules.ps1` | 添加防火墙入站规则（管理员运行） |
+| `scripts/set_dns.ps1` | 设置/回滚 WLAN 网卡 DNS（管理员运行） |
 | `requirements.txt` | Python 依赖：flask、zeroconf、dnslib |
-| `success_screenshot.jpg` | 手机成功访问的截图 |
+| `docs/images/success_screenshot.jpg` | 手机成功访问的截图 |
 
 ### mdns_register.py 参数
 
 ```bash
-python mdns_register.py --name myflask --ip "192.168.137.1,10.21.149.173" --port 5000
+python src/mdns_register.py --name myflask --ip "192.168.137.1,10.21.149.173" --port 5000
 ```
 
 - `--name`：域名主体（不含 `.local` 后缀），默认 `myflask`
@@ -177,14 +177,14 @@ python mdns_register.py --name myflask --ip "192.168.137.1,10.21.149.173" --port
 ### dns_server.py 参数
 
 ```bash
-python dns_server.py [上游DNS]     # 默认 223.5.5.5
+python src/dns_server.py [上游DNS]     # 默认 223.5.5.5
 ```
 
 ## 7. 回滚与清理
 
 ```powershell
 # 恢复 WLAN 网卡 DNS 为 DHCP 自动获取（管理员）
-powershell -ExecutionPolicy Bypass -File .\set_dns.ps1 -Address dhcp
+powershell -ExecutionPolicy Bypass -File .\scripts\set_dns.ps1 -Address dhcp
 ```
 
 ```bash
